@@ -89,5 +89,70 @@ typedef BLE BLEDevice;
 
 ## LEDDemo 介绍
 
+### 异步通知
+
+LEDDemo 里也有打广播的流程，这里就不详细介绍了，mbed-os BLE_Advertising 这篇文章里把流程介绍的很详细。
+
+我们来看看 LEDDemo 作为一个 BLE Server 与单纯的打广播有什么不同的地方。
+
+首先在 BLE 协议栈初始化完成后的回调函数里：
+
+```C++
+/** Callback triggered when the ble initialization process has finished */
+void on_init_complete(BLE::InitializationCompleteCallbackContext *params) {
+    ......
+
+    _led_service = new LEDService(_ble, false);
+
+    _ble.gattServer().onDataWritten(this, &LEDDemo::on_data_written);
+
+    ......
+}
+```
+
+在这里多了创建 `_led_service` 这个 BLE Service 的步骤，并且调用了 `_ble.gattServer().onDataWritten()` 这个接口，设置了 client 和 server 建立连接后，client 向 server 写数据这个事件的回调函数，在这个回调函数里实现了 LED 灯的亮灭，也就是所谓的蓝牙点灯。
+
+```C++
+/**
+     * This callback allows the LEDService to receive updates to the ledState Characteristic.
+     *
+     * @param[in] params Information about the characterisitc being updated.
+     */
+void on_data_written(const GattWriteCallbackParams *params) {
+    if ((params->handle == _led_service->getValueHandle()) && (params->len == 1)) {
+        _actuated_led = *(params->data);
+    }
+}
+```
+
+mbed-os BLE 协议栈还定义了其他类似的事件接口：
+
+- `onDataSent`：注册一个事件回调函数，当 server 发送一个 characteristic value 更新值给 client 时回调该函数。
+- `onDataWriten`：注册一个事件回调函数，当 client 写了一个 server 的 attribute 之后回调该函数。
+- `onDataRead`：注册一个事件回调函数，当 client 读取了一个 server 的 attribute 之后回调该函数。
+- `onUpdatesEnabled`：注册一个事件回调函数，当 client 订阅某个 characteristic 的更新值时回调该函数。
+- `onUpdatesDisabled`：注册一个事件回调函数，当 client 取消订阅某个 characteristic 的更新值时回调该函数。
+- `onConfimationReceived`：注册一个事件回调函数，当 client 确认收到了一个 characteristic value 的通知时回调该函数（也就是收到 ATT_HANDLE_VALUE_CFM  这个包的时候）。
+
+### 广播数据
+
+首先设置广播参数：
+
+- 广播类型：可连接，不定向
+- 广播间隔：1000 ms
+
+然后设置了广播数据：
+
+| Length | AD Type                             | AD Data                                       |
+| ------ | ----------------------------------- | --------------------------------------------- |
+|        | 0x01 - «Flags»                      | `BREDR_NOT_SUPPORTED|LE_GENERAL_DISCOVERABLE` |
+|        | 0x03 - «16-bit Service Class UUIDs» | 0xA000                                        |
+|        | 0x09 - «Device Name»                | "LED"                                         |
+
+### 使用示例
+
 TODO
 
+## 抓包分析
+
+TODO
